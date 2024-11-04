@@ -11,8 +11,8 @@ import Tokenizers
 struct ContentView: View {
 
     @State var prompt = ""
-    @State var llm = LLMEvaluator()
-    @Environment(DeviceStat.self) private var deviceStat
+    @StateObject var llm = LLMEvaluator()
+    @EnvironmentObject var deviceStat: DeviceStat
 
     enum displayStyle: String, CaseIterable, Identifiable {
         case plain, markdown
@@ -21,6 +21,10 @@ struct ContentView: View {
 
     @State private var selectedDisplayStyle = displayStyle.markdown
 
+    private func scrollToBottom(proxy: ScrollViewProxy) {
+        proxy.scrollTo("bottom")
+    }
+    
     var body: some View {
         VStack(alignment: .leading) {
             VStack {
@@ -67,8 +71,11 @@ struct ContentView: View {
                                 .textSelection(.enabled)
                         }
                     }
-                    .onChange(of: llm.output) { _, _ in
-                        sp.scrollTo("bottom")
+                    .onAppear {
+                        scrollToBottom(proxy: sp)
+                    }
+                    .onChange(of: llm.output) { _ in
+                        scrollToBottom(proxy: sp)
                     }
 
                     Spacer()
@@ -96,7 +103,7 @@ struct ContentView: View {
         .toolbar {
             ToolbarItem {
                 Label(
-                    "Memory Usage: \(deviceStat.gpuUsage.activeMemory.formatted(.byteCount(style: .memory)))",
+                    "Memory Usage: \(deviceStat.gpuUsage?.activeMemory.formatted(.byteCount(style: .memory)) ?? "N/A")",
                     systemImage: "info.circle.fill"
                 )
                 .labelStyle(.titleAndIcon)
@@ -104,9 +111,9 @@ struct ContentView: View {
                 .help(
                     Text(
                         """
-                        Active Memory: \(deviceStat.gpuUsage.activeMemory.formatted(.byteCount(style: .memory)))/\(GPU.memoryLimit.formatted(.byteCount(style: .memory)))
-                        Cache Memory: \(deviceStat.gpuUsage.cacheMemory.formatted(.byteCount(style: .memory)))/\(GPU.cacheLimit.formatted(.byteCount(style: .memory)))
-                        Peak Memory: \(deviceStat.gpuUsage.peakMemory.formatted(.byteCount(style: .memory)))
+                        Active Memory: \(deviceStat.gpuUsage?.activeMemory.formatted(.byteCount(style: .memory)) ?? "N/A"))/\(GPU.memoryLimit.formatted(.byteCount(style: .memory)))
+                        Cache Memory: \(deviceStat.gpuUsage?.cacheMemory.formatted(.byteCount(style: .memory)) ?? "N/A"))/\(GPU.cacheLimit.formatted(.byteCount(style: .memory)))
+                        Peak Memory: \(deviceStat.gpuUsage?.peakMemory.formatted(.byteCount(style: .memory)) ?? "N/A"))
                         """
                     )
                 )
@@ -147,15 +154,14 @@ struct ContentView: View {
     }
 }
 
-@Observable
 @MainActor
-class LLMEvaluator {
+class LLMEvaluator: ObservableObject {
 
-    var running = false
+    @Published var running = false
 
-    var output = ""
-    var modelInfo = ""
-    var stat = ""
+    @Published var output = ""
+    @Published var modelInfo = ""
+    @Published var stat = ""
 
     /// This controls which model loads. `phi3_5_4bit` is one of the smaller ones, so this will fit on
     /// more devices.
@@ -166,7 +172,7 @@ class LLMEvaluator {
 
     /// parameters controlling the output
     let generateParameters = GenerateParameters(temperature: 0.6)
-    let maxTokens = 240
+    let maxTokens = 256
 
     /// update the display every N tokens -- 4 looks like it updates continuously
     /// and is low overhead.  observed ~15% reduction in tokens/s when updating

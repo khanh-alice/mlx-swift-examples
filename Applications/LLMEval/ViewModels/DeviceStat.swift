@@ -2,11 +2,10 @@ import Foundation
 import LLM
 import MLX
 
-@Observable
-final class DeviceStat: @unchecked Sendable {
+final class DeviceStat: ObservableObject, @unchecked Sendable {
 
-    @MainActor
-    var gpuUsage = GPU.snapshot()
+    @Published
+    private(set) var gpuUsage: MLX.GPU.Snapshot?
 
     private let initialGPUSnapshot = GPU.snapshot()
     private var timer: Timer?
@@ -27,5 +26,4 @@ final class DeviceStat: @unchecked Sendable {
             self?.gpuUsage = gpuSnapshotDelta
         }
     }
-
 }
